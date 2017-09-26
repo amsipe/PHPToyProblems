@@ -24,3 +24,4 @@ foreach ($faces as $face=>$value){
 }
 
 print_r($deck);
+

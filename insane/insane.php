@@ -35,18 +35,51 @@ class Blackjack {
     public $players = [];
     public $deck;
     public $rounds = [];
+    public $gameDetails = [];
+    public $blackjackRounds = [];
+
     public function __construct()
     {
         $this->players["Player"]["bank"] = 1000;
-        $this->players["Dealer"]["bank"] = 1000;
         $this->deck = $this->create_random_deck();
+        $this->gameDetails["BalanceHalf"] = 'NA';
+    }
+
+    public function game_logic ()
+    {
+        //main game logic - continue player rounds as long as player has money and cards are still left
+        while($this->players["Player"]["bank"] > 0 && count($this->deck) > 0)
+        {
+            if(count($this->deck) <=3)
+            {
+                $this->update_winner("Player");
+                break;
+            }else{
+                $this->play_round();
+
+                if($this->players["Player"]["bank"] <= 0)
+                {
+                    $this->update_winner("Dealer");
+                }elseif (count($this->deck) == 0)
+                {
+                    $this->update_winner("Player");
+                }
+            }
+
+        }
+    }
+
+    private function update_winner($winner){
+        $this->gameDetails["GameWinner"] = $winner;
+        $this->gameDetails["GamesPlayed"] = count($this->rounds);
+        $this->gameDetails["HandsBlackjack"] = count($this->blackjackRounds);
     }
 
     private function create_random_deck (){
         $suits = array ("clubs", "diamonds", "hearts", "spades");
         $faces = array (
             "Ace" => 1, "2" => 2,"3" => 3, "4" => 4, "5" => 5, "6" => 6, "7" => 7,
-            "8" => 8, "9" => 9, "10" => 10, "Jack" => 11, "Queen" => 12, "King" => 13);
+            "8" => 8, "9" => 9, "10" => 10, "Jack" => 10, "Queen" => 10, "King" => 10);
         $deck = array();
         foreach ($faces as $face=>$value){
             foreach ($suits as $suit){
@@ -65,42 +98,134 @@ class Blackjack {
     public function deal_card()
     {
         $card = [];
+        // step loop to get the first key=>value from the deck array and immediately break
         foreach ($this->deck as $key => $value)
         {
             $card[$key] = $value;
             break;
         }
-        array_shift($this->deck);
+        array_shift($this->deck); //remove the first element from the deck array
+
         return $card;
     }
     public function deal_hands()
     {
-        $round = [];
-        for($i=1;$i<=2;$i++){
-            $round["Player"][] = $this->deal_card();
-            $round["Dealer"][] = $this->deal_card();
+        if(count($this->deck) >= 4)
+        {
+            $round = [];
+            for($i=0;$i<2;$i++){
 
+                foreach($this->deal_card() as $key => $value)
+                {
+                    $round["Player"][$key] = $value;
+                }
+                foreach ($this->deal_card() as $key=> $value)
+                {
+                    $round["Dealer"][$key] = $value;
+                }
+
+            }
+            return $round;
+        }else
+        {
+            return false;
         }
-        return $round;
+
     }
 
     public function play_round()
     {
+
         $round = $this->deal_hands();
-        $playerValues = [];
-        foreach ($round["Player"] as $card => $value)
-        {
-            $playerValues[] = array_values(array_values($value));
-        }
-        $playerSum = array_sum($playerValues);
-        print_r($playerValues);
-        return $round;
+
+//        if($round)
+//        {
+            $playerValues = [];
+            $dealerValues = [];
+            foreach ($round["Player"] as $card => $value)
+            {
+                $playerValues[] = $value;
+            }
+            foreach ($round["Dealer"] as $card => $value)
+            {
+                $dealerValues[] = $value;
+            }
+            $playerSum = array_sum($playerValues);
+            $dealerSum = array_sum($dealerValues);
+            while($playerSum <= $dealerSum)
+            {
+                //deal a card to player
+                $newCard = $this->deal_card();
+                //continue if we get a card back from deck
+                if($newCard)
+                {
+                    $playerValues[] = reset($newCard);
+                    foreach($newCard as $key => $value)
+                    {
+                        $round["Player"][$key] = $value;
+                    }
+                    $playerSum = array_sum($playerValues);
+
+                    //check if player or dealer went over
+                    if($playerSum >= 21){
+
+                        $round["Winner"] = "dealer";
+                        $this->players["Player"]["bank"] -= 100;
+                        break;
+                    }else if($playerSum > $dealerSum)
+                    {
+                        break;
+                    }
+                }else{ //if no card comes back - dealer is round winner
+                    $round["Winner"] = "dealer";
+                    $this->players["Player"]["bank"] -= 100;
+                    break;
+                }
+
+
+
+            }
+            while($dealerSum < $playerSum && $round["Winner"] != "dealer")
+            {
+                //deal a card to dealer
+                $newCard = $this->deal_card();
+                $dealerValues[] = reset($newCard);
+                foreach($newCard as $key => $value)
+                {
+                    $round["Dealer"][$key] = $value;
+                }
+                $dealerSum = array_sum($dealerValues);
+                //check if player or dealer went over
+                if($dealerSum > 21){
+                    $round["Winner"] = "player";
+                    $this->players["Player"]["bank"] += 200;
+                    break;
+                }else
+                {
+                    $round["Winner"] = "dealer";
+                    $this->players["Player"]["bank"] -= 100;
+                }
+            }
+
+            $round["BankBalance"] = $this->players["Player"]["bank"]; //update player balance after round is over
+            $roundIndex = count($this->rounds);
+            if($this->players["Player"]["bank"] == 500)
+            {
+                $this->gameDetails["BalanceHalf"] = "Round " . ($roundIndex + 1);
+            }
+            if($playerSum == 21)
+            {
+                $this->blackjackRounds[] = "Round " . ($roundIndex + 1); //if blackjack - push into global array
+            }
+            $this->rounds["Round " . ($roundIndex + 1)] = $round; //store the round into global rounds array
+        //}
+
     }
 
 
 }
 
 $game = new Blackjack();
-//print_r($game->deal_card());
-print_r($game->play_round());
-//print_r($game->rounds);
+$game->game_logic();
+
+print_r($game->gameDetails);
